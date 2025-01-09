@@ -1,0 +1,6 @@
+Place your student images in this directory with the following names:
+student1.jpg
+student2.jpg
+student3.jpg
+student4.jpg
+supervisor.jpg
