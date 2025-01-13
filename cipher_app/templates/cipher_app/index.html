@@ -64,10 +64,10 @@
                             <button type="submit" class="btn btn-primary">Encrypt</button>
                         </form>
                         <div id="encryptResult" class="result-box" style="display: none;"></div>
-                        <div id="encryptDetails" class="process-details" style="display: none;">
+                         {% comment %} <div id="encryptDetails" class="process-details" style="display: none;">
                             <h5>Encryption Process Details</h5>
                             <div id="encryptProcessInfo"></div>
-                        </div>
+                        </div>  {% endcomment %}
                     </div>
                 </div>
             </div>
@@ -86,10 +86,10 @@
                             <button type="submit" class="btn btn-success">Decrypt</button>
                         </form>
                         <div id="decryptResult" class="result-box" style="display: none;"></div>
-                        <div id="decryptDetails" class="process-details" style="display: none;">
+                        {% comment %} <div id="decryptDetails" class="process-details" style="display: none;">
                             <h5>Decryption Process Details</h5>
                             <div id="decryptProcessInfo"></div>
-                        </div>
+                        </div>  {% endcomment %}
                     </div>
                 </div>
             </div>
@@ -115,7 +115,7 @@
         }
         const csrftoken = getCookie('csrftoken');
 
-        function displayProcessInfo(processInfo, targetDiv) {
+        {% comment %} function displayProcessInfo(processInfo, targetDiv) {
             let html = '<div class="mb-4">';
             
             // Display initial states
@@ -166,7 +166,7 @@
             
             html += '</div>';
             $(targetDiv).html(html);
-        }
+        } {% endcomment %}
 
         $(document).ready(function() {
             $('#encryptForm').on('submit', function(e) {
@@ -195,8 +195,8 @@
                         $('#encryptResult').html(`
                             <strong>Encrypted Result:</strong><br>
                             <div class="mt-2">${response.result}</div>
-                            <strong class="mt-3">Keystream:</strong><br>
-                            <div class="mt-2">${response.keystream}</div>
+                             <strong class="mt-3">Keystream:</strong><br> 
+                             <div class="mt-2">${response.keystream}</div> 
                         `).show();
                         $('#encryptDetails').show();
                         displayProcessInfo(response.process_info, '#encryptProcessInfo');
@@ -239,8 +239,8 @@
                         $('#decryptResult').html(`
                             <strong>Decrypted Result:</strong><br>
                             <div class="mt-2">${response.result}</div>
-                            <strong class="mt-3">Keystream:</strong><br>
-                            <div class="mt-2">${response.keystream}</div>
+                             <strong class="mt-3">Keystream:</strong><br> 
+                            <div class="mt-2">${response.keystream}</div> 
                         `).show();
                         $('#decryptDetails').show();
                         displayProcessInfo(response.process_info, '#decryptProcessInfo');
