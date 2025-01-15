@@ -4,7 +4,6 @@ class LFSR:
         self.initial_state = initial_state.copy()  # Store initial state
         self.tap_positions = tap_positions
         self.length = len(initial_state)
-
     def step(self):
         # Calculate feedback
         feedback = 0
@@ -33,7 +32,6 @@ class GeffeCipher:
         self.lfsr1 = LFSR(lfsr1_init, lfsr1_taps)
         self.lfsr2 = LFSR(lfsr2_init, lfsr2_taps)
         self.lfsr3 = LFSR(lfsr3_init, lfsr3_taps)
-
     def step(self):
         """
         Execute one step of the Geffe algorithm and return the output bit
@@ -42,19 +40,14 @@ class GeffeCipher:
         x1 = self.lfsr1.step()
         x2 = self.lfsr2.step()
         x3 = self.lfsr3.step()
-        
         # First term: LFSR1 AND LFSR2
         term1 = x1 & x2
-        
         # Second term: LFSR2 AND (NOT LFSR3)
         not_x3 = 1 ^ x3
         term2 = x2 & not_x3
-        
         # Final output
         result = term1 ^ term2
-        
         return result
-
     def generate_keystream(self, length):
         """
         Generate keystream of specified length
@@ -113,14 +106,11 @@ def main():
     print(f"LFSR1 (5-bit):  Initial state: {lfsr1_init}, Taps: {lfsr1_taps}")
     print(f"LFSR2 (7-bit):  Initial state: {lfsr2_init}, Taps: {lfsr2_taps}")
     print(f"LFSR3 (11-bit): Initial state: {lfsr3_init}, Taps: {lfsr3_taps}")
-
     # Create Geffe Cipher instance
     geffe = GeffeCipher(lfsr1_init, lfsr1_taps, lfsr2_init, lfsr2_taps, lfsr3_init, lfsr3_taps)
-
     # Message to be encrypted
     message = "Hello"
     print(f"\nOriginal message: {message}")
-
     # Generate keystream
     print("\nGenerating keystream...")
     keystream = geffe.generate_keystream(len(message) * 8)

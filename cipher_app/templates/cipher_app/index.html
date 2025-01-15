@@ -64,10 +64,10 @@
                             <button type="submit" class="btn btn-primary">Encrypt</button>
                         </form>
                         <div id="encryptResult" class="result-box" style="display: none;"></div>
-                         {% comment %} <div id="encryptDetails" class="process-details" style="display: none;">
+                         <div id="encryptDetails" class="process-details" style="display: none;">
                             <h5>Encryption Process Details</h5>
                             <div id="encryptProcessInfo"></div>
-                        </div>  {% endcomment %}
+                        </div> 
                     </div>
                 </div>
             </div>
@@ -86,10 +86,10 @@
                             <button type="submit" class="btn btn-success">Decrypt</button>
                         </form>
                         <div id="decryptResult" class="result-box" style="display: none;"></div>
-                        {% comment %} <div id="decryptDetails" class="process-details" style="display: none;">
+                        <div id="decryptDetails" class="process-details" style="display: none;">
                             <h5>Decryption Process Details</h5>
                             <div id="decryptProcessInfo"></div>
-                        </div>  {% endcomment %}
+                        </div>  
                     </div>
                 </div>
             </div>
@@ -113,9 +113,18 @@
             }
             return cookieValue;
         }
-        const csrftoken = getCookie('csrftoken');
 
-        {% comment %} function displayProcessInfo(processInfo, targetDiv) {
+        // Set up CSRF token for all AJAX requests
+        const csrftoken = getCookie('csrftoken');
+        $.ajaxSetup({
+            beforeSend: function(xhr, settings) {
+                if (!/^(GET|HEAD|OPTIONS|TRACE)$/i.test(settings.type) && !this.crossDomain) {
+                    xhr.setRequestHeader("X-CSRFToken", csrftoken);
+                }
+            }
+        });
+
+        function displayProcessInfo(processInfo, targetDiv) {
             let html = '<div class="mb-4">';
             
             // Display initial states
@@ -127,27 +136,23 @@
                     <div>Tap positions: [${processInfo.initial_states[reg].taps.join(', ')}]</div>
                 </div>`;
             }
-            
             // Display steps
             html += '<h6 class="mt-3">Process Steps:</h6>';
             processInfo.steps.forEach((step, index) => {
                 html += `<div class="step-box">
                     <h6>Step ${index + 1}</h6>
-                    
                     <div class="mb-2">
                         <strong>LFSR1:</strong>
                         <div class="register-state">State: [${step.lfsr1.state.join(', ')}]</div>
                         <div>Feedback: <span class="feedback-value">${step.lfsr1.feedback}</span></div>
                         <div>Output: <span class="output-value">${step.lfsr1.output}</span></div>
                     </div>
-                    
                     <div class="mb-2">
                         <strong>LFSR2:</strong>
                         <div class="register-state">State: [${step.lfsr2.state.join(', ')}]</div>
                         <div>Feedback: <span class="feedback-value">${step.lfsr2.feedback}</span></div>
                         <div>Output: <span class="output-value">${step.lfsr2.output}</span></div>
                     </div>
-                    
                     <div class="mb-2">
                         <strong>LFSR3:</strong>
                         <div class="register-state">State: [${step.lfsr3.state.join(', ')}]</div>
@@ -166,43 +171,53 @@
             
             html += '</div>';
             $(targetDiv).html(html);
-        } {% endcomment %}
-
+        } 
         $(document).ready(function() {
             $('#encryptForm').on('submit', function(e) {
                 e.preventDefault();
                 const plaintext = $('#plaintext').val();
-                if (!plaintext) {
-                    alert('Please enter text to encrypt');
-                    return;
-                }
-
                 $.ajax({
                     url: '/process_text/',
-                    method: 'POST',
+                    type: 'POST',
                     data: {
-                        text: plaintext,
-                        action: 'encrypt'
-                    },
-                    headers: {
-                        'X-CSRFToken': csrftoken
+                        'text': plaintext,
+                        'action': 'encrypt'
                     },
                     success: function(response) {
-                        if (response.error) {
-                            alert('Error: ' + response.error);
-                            return;
+                        $('#encryptResult').show().html(`
+                            <div class="mb-3">
+                                <strong>Encrypted Result:</strong><br>
+                                <div class="mt-2 p-2 bg-light border rounded font-monospace">
+                                    ${response.result}
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <strong>LFSR Outputs and Operations:</strong><br>
+                                <div class="mt-2 p-2 bg-light border rounded font-monospace">
+                                    <div>LFSR1 Output: ${response.lfsr_outputs.lfsr1}</div>
+                                    <div>LFSR2 Output: ${response.lfsr_outputs.lfsr2}</div>
+                                    <div>LFSR3 Output: ${response.lfsr_outputs.lfsr3}</div>
+                                    <div class="mt-2">Operations:</div>
+                                    <div>LFSR1 AND LFSR2: ${response.lfsr_outputs.term1_and}</div>
+                                    <div>NOT LFSR3: ${response.lfsr_outputs.not_x3}</div>
+                                    <div>LFSR2 AND (NOT LFSR3): ${response.lfsr_outputs.term2_and}</div>
+                                    <div>Final XOR (Keystream): ${response.lfsr_outputs.final_xor}</div>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <strong>Keystream:</strong><br>
+                                <div class="mt-2 p-2 bg-light border rounded font-monospace">
+                                    ${response.keystream}
+                                </div>
+                            </div>
+                        `);
+                        if (response.process_info) {
+                            $('#encryptDetails').show();
+                            displayProcessInfo(response.process_info, '#encryptProcessInfo');
                         }
-                        $('#encryptResult').html(`
-                            <strong>Encrypted Result:</strong><br>
-                            <div class="mt-2">${response.result}</div>
-                             <strong class="mt-3">Keystream:</strong><br> 
-                             <div class="mt-2">${response.keystream}</div> 
-                        `).show();
-                        $('#encryptDetails').show();
-                        displayProcessInfo(response.process_info, '#encryptProcessInfo');
                     },
                     error: function(xhr) {
-                        alert('Error: ' + (xhr.responseJSON?.error || 'An error occurred during encryption'));
+                        $('#encryptResult').show().html('<div class="alert alert-danger">Error: ' + (xhr.responseJSON ? xhr.responseJSON.error : 'An error occurred') + '</div>');
                     }
                 });
             });
@@ -210,43 +225,49 @@
             $('#decryptForm').on('submit', function(e) {
                 e.preventDefault();
                 const ciphertext = $('#ciphertext').val();
-                if (!ciphertext) {
-                    alert('Please enter binary to decrypt');
-                    return;
-                }
-
-                // Validate binary input
-                if (!/^[01]+$/.test(ciphertext)) {
-                    alert('Please enter valid binary data (only 0s and 1s)');
-                    return;
-                }
-
+                
                 $.ajax({
                     url: '/process_text/',
-                    method: 'POST',
+                    type: 'POST',
                     data: {
-                        text: ciphertext,
-                        action: 'decrypt'
-                    },
-                    headers: {
-                        'X-CSRFToken': csrftoken
+                        'text': ciphertext, 
+                        'action': 'decrypt'
                     },
                     success: function(response) {
-                        if (response.error) {
-                            alert('Error: ' + response.error);
-                            return;
+                        $('#decryptResult').show().html(`
+                            <div class="mb-3">
+                                <strong>Decrypted Result:</strong><br>
+                                <div class="mt-2 p-2 bg-light border rounded">
+                                    ${response.result}
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <strong>LFSR Outputs and Operations:</strong><br>
+                                <div class="mt-2 p-2 bg-light border rounded font-monospace">
+                                    <div>LFSR1 Output: ${response.lfsr_outputs.lfsr1}</div>
+                                    <div>LFSR2 Output: ${response.lfsr_outputs.lfsr2}</div>
+                                    <div>LFSR3 Output: ${response.lfsr_outputs.lfsr3}</div>
+                                    <div class="mt-2">Operations:</div>
+                                    <div>LFSR1 AND LFSR2: ${response.lfsr_outputs.term1_and}</div>
+                                    <div>NOT LFSR3: ${response.lfsr_outputs.not_x3}</div>
+                                    <div>LFSR2 AND (NOT LFSR3): ${response.lfsr_outputs.term2_and}</div>
+                                    <div>Final XOR (Keystream): ${response.lfsr_outputs.final_xor}</div>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <strong>Keystream:</strong><br>
+                                <div class="mt-2 p-2 bg-light border rounded font-monospace">
+                                    ${response.keystream}
+                                </div>
+                            </div>
+                        `);
+                        if (response.process_info) {
+                            $('#decryptDetails').show();
+                            displayProcessInfo(response.process_info, '#decryptProcessInfo');
                         }
-                        $('#decryptResult').html(`
-                            <strong>Decrypted Result:</strong><br>
-                            <div class="mt-2">${response.result}</div>
-                             <strong class="mt-3">Keystream:</strong><br> 
-                            <div class="mt-2">${response.keystream}</div> 
-                        `).show();
-                        $('#decryptDetails').show();
-                        displayProcessInfo(response.process_info, '#decryptProcessInfo');
                     },
                     error: function(xhr) {
-                        alert('Error: ' + (xhr.responseJSON?.error || 'An error occurred during decryption'));
+                        $('#decryptResult').show().html('<div class="alert alert-danger">Error: ' + (xhr.responseJSON ? xhr.responseJSON.error : 'An error occurred') + '</div>');
                     }
                 });
             });

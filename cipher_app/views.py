@@ -16,8 +16,13 @@ def process_text(request):
     if request.method == 'POST':
         try:
             text = request.POST.get('text', '')
+            if not text:
+                return JsonResponse({'error': 'No text provided'}, status=400)
+                
             action = request.POST.get('action', '')
-            
+            if action not in ['encrypt', 'decrypt']:
+                return JsonResponse({'error': 'Invalid action'}, status=400)
+
             # Initial states and tap positions
             lfsr1_init = [1, 0, 1, 0, 1]  # 5-bit
             lfsr1_taps = [0, 2]
@@ -28,98 +33,101 @@ def process_text(request):
             lfsr3_init = [1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1]  # 11-bit
             lfsr3_taps = [0, 2]
             
-            # Create process information dictionary
-            process_info = {
-                'initial_states': {
-                    'lfsr1': {'state': lfsr1_init, 'taps': lfsr1_taps},
-                    'lfsr2': {'state': lfsr2_init, 'taps': lfsr2_taps},
-                    'lfsr3': {'state': lfsr3_init, 'taps': lfsr3_taps}
-                },
-                'steps': []
-            }
-            
             class DetailedGeffeCipher(GeffeCipher):
                 def step(self):
                     # LFSR1 step
-                    lfsr1_state = self.lfsr1.state.copy()
-                    lfsr1_feedback = 0
-                    for tap in self.lfsr1.tap_positions:
-                        lfsr1_feedback ^= lfsr1_state[tap]
-                    x1 = lfsr1_state[-1]
-                    
+                    x1 = self.lfsr1.step()
                     # LFSR2 step
-                    lfsr2_state = self.lfsr2.state.copy()
-                    lfsr2_feedback = 0
-                    for tap in self.lfsr2.tap_positions:
-                        lfsr2_feedback ^= lfsr2_state[tap]
-                    x2 = lfsr2_state[-1]
-                    
+                    x2 = self.lfsr2.step()
                     # LFSR3 step
-                    lfsr3_state = self.lfsr3.state.copy()
-                    lfsr3_feedback = 0
-                    for tap in self.lfsr3.tap_positions:
-                        lfsr3_feedback ^= lfsr3_state[tap]
-                    x3 = lfsr3_state[-1]
-                    
+                    x3 = self.lfsr3.step()
                     # Calculate combined output
-                    term1 = x1 & x2
-                    term2 = x2 & (1 ^ x3)
-                    result = term1 ^ term2
-                    
+                    term1 = x1 & x2  # First AND operation
+                    not_x3 = 1 ^ x3  # NOT operation on x3
+                    term2 = x2 & not_x3  # Second AND operation
+                    result = term1 ^ term2  # Final XOR operation
                     # Store step information
                     step_info = {
-                        'lfsr1': {
-                            'state': lfsr1_state,
-                            'feedback': lfsr1_feedback,
-                            'output': x1
-                        },
-                        'lfsr2': {
-                            'state': lfsr2_state,
-                            'feedback': lfsr2_feedback,
-                            'output': x2
-                        },
-                        'lfsr3': {
-                            'state': lfsr3_state,
-                            'feedback': lfsr3_feedback,
-                            'output': x3
-                        },
-                        'combination': {
-                            'term1': term1,
-                            'term2': term2,
-                            'result': result
-                        }
+                        'lfsr1_output': x1,
+                        'lfsr2_output': x2,
+                        'lfsr3_output': x3,
+                        'term1': term1,
+                        'not_x3': not_x3,
+                        'term2': term2,
+                        'result': result
                     }
-                    process_info['steps'].append(step_info)
-                    
-                    # Call parent's step method to actually update states
-                    return super().step()
-            
+                    return result, step_info
+                def generate_keystream(self, length):
+                    """Generate keystream of specified length with detailed step information"""
+                    keystream = []
+                    steps_info = []
+                    for _ in range(length):
+                        bit, step_info = self.step()
+                        keystream.append(bit)
+                        steps_info.append(step_info)
+                    return keystream, steps_info
+
             geffe = DetailedGeffeCipher(lfsr1_init, lfsr1_taps, lfsr2_init, lfsr2_taps, lfsr3_init, lfsr3_taps)
             
             if action == 'encrypt':
-                keystream = geffe.generate_keystream(len(text) * 8)
-                encrypted_bits = encrypt_message(text, keystream)
-                result = ''.join(map(str, encrypted_bits))
-                return JsonResponse({
-                    'result': result,
-                    'process_info': process_info,
-                    'keystream': ''.join(map(str, keystream))
-                })
-                
-            elif action == 'decrypt':
                 try:
-                    cipher_bits = [int(bit) for bit in text.strip()]
-                    keystream = geffe.generate_keystream(len(cipher_bits))
-                    result = decrypt_message(cipher_bits, keystream)
+                    keystream, steps_info = geffe.generate_keystream(len(text) * 8)
+                    encrypted_bits = encrypt_message(text, keystream)
+                    # Format the outputs
+                    formatted_result = ''.join(map(str, encrypted_bits))
+                    formatted_keystream = ''.join(map(str, keystream))
+                    
+                    # Collect LFSR outputs and operations
+                    lfsr_outputs = {
+                        'lfsr1': ''.join(str(step['lfsr1_output']) for step in steps_info),
+                        'lfsr2': ''.join(str(step['lfsr2_output']) for step in steps_info),
+                        'lfsr3': ''.join(str(step['lfsr3_output']) for step in steps_info),
+                        'term1_and': ''.join(str(step['term1']) for step in steps_info),
+                        'not_x3': ''.join(str(step['not_x3']) for step in steps_info),
+                        'term2_and': ''.join(str(step['term2']) for step in steps_info),
+                        'final_xor': formatted_keystream
+                    }
+                    
                     return JsonResponse({
-                        'result': result,
-                        'process_info': process_info,
-                        'keystream': ''.join(map(str, keystream))
+                        'result': formatted_result,
+                        'keystream': formatted_keystream,
+                        'lfsr_outputs': lfsr_outputs
                     })
-                except ValueError as e:
-                    return JsonResponse({'error': str(e)}, status=400)
-                
+                except Exception as e:
+                    return JsonResponse({
+                        'error': f'Encryption failed: {str(e)}'
+                    }, status=500)
+            else:  # decrypt
+                try:
+                    # Convert input string of bits to list of integers
+                    binary_input = [int(bit) for bit in text.replace(' ', '')]
+                    keystream, steps_info = geffe.generate_keystream(len(binary_input))
+                    decrypted_text = decrypt_message(binary_input, keystream)
+                    # Format the outputs
+                    formatted_keystream = ''.join(map(str, keystream))
+                    # Collect LFSR outputs and operations
+                    lfsr_outputs = {
+                        'lfsr1': ''.join(str(step['lfsr1_output']) for step in steps_info),
+                        'lfsr2': ''.join(str(step['lfsr2_output']) for step in steps_info),
+                        'lfsr3': ''.join(str(step['lfsr3_output']) for step in steps_info),
+                        'term1_and': ''.join(str(step['term1']) for step in steps_info),
+                        'not_x3': ''.join(str(step['not_x3']) for step in steps_info),
+                        'term2_and': ''.join(str(step['term2']) for step in steps_info),
+                        'final_xor': formatted_keystream
+                    }
+                    return JsonResponse({
+                        'result': decrypted_text,
+                        'keystream': formatted_keystream,
+                        'lfsr_outputs': lfsr_outputs
+                    })
+                except Exception as e:
+                    return JsonResponse({
+                        'error': f'Decryption failed: {str(e)}'
+                    }, status=500)
+                    
         except Exception as e:
-            return JsonResponse({'error': str(e)}, status=400)
+            return JsonResponse({
+                'error': f'An error occurred: {str(e)}'
+            }, status=500)
             
-    return JsonResponse({'error': 'Invalid request'}, status=400)
+    return JsonResponse({'error': 'Method not allowed'}, status=405)
